@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compiler Lab · Compiler Whisperer</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.in{display:flex;gap:10px;flex-wrap:wrap}
+.in input{flex:1;min-width:240px;background:#120d1c;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--ink);font:17px 'JetBrains Mono',monospace;outline:0}
+.in input:focus{border-color:var(--lilac)}
+.in .go{width:auto;margin:0;padding:0 28px}
+.eg{margin:12px 0 0;display:flex;gap:8px;flex-wrap:wrap}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.two{grid-template-columns:1fr}}
+.box{background:var(--panel2);border-radius:14px;padding:16px;margin-top:16px}
+.box h3{font:500 1.15rem 'Fraunces',serif;margin-bottom:2px}.box .d{color:var(--mute);font-size:13.5px;margin-bottom:10px}
+.tok{display:flex;gap:6px;flex-wrap:wrap}.tok span{background:#120d1c;border-radius:8px;padding:4px 10px;font:13px 'JetBrains Mono'}
+.tok small{color:var(--mute);margin-left:6px;font-size:11px}
+.code{background:#120d1c;border-radius:10px;padding:12px 14px;line-height:1.7}
+.save{color:var(--mint);margin-top:8px;font-size:14px}
+svg{max-width:100%;height:auto;display:block;margin:auto}svg text{font:600 14px 'JetBrains Mono';text-anchor:middle;dominant-baseline:central}
+.gram{color:var(--mute)}
+</style></head>
+<body><div class="wrap">
+<h1>Compiler <span>Lab</span></h1>
+<p class="sub">Type an arithmetic statement and watch it travel through the phases of a compiler: tokens, parse tree, intermediate code, optimisation and target code.</p>
+<section class="panel">
+  <div class="in"><input id="e" value="x = 2 * (3 + 4) - y * 1" spellcheck="false" aria-label="Expression"><button class="go" id="run">Compile</button></div>
+  <div class="eg" id="eg"></div>
+</section>
+<div id="out"></div>
+</div>
+<script src="/static/nav.js"></script>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const EG=['x = 2 * (3 + 4) - y * 1','total = price * (1 + 0.18) + 10 / 2','a = -(b + 3) * 0 + c','z = (4 + 5 * 2','y = 3 $ 4'];
+$('#eg').innerHTML=EG.map(x=>`<button class="pill">${esc(x)}</button>`).join('');
+document.querySelectorAll('#eg .pill').forEach(b=>b.onclick=()=>{$('#e').value=b.textContent;run();});
+$('#e').onkeydown=e=>{if(e.key==='Enter')run()};$('#run').onclick=run;
+
+const COL={OP:'#ffc2a1',NUMBER:'#8ee6bf',ID:'#c3b1ff',ASSIGN:'#ff8aa5',NEG:'#ffd48a'};
+function tree(n){
+  (function lay(n){n.w=n.kids.length?n.kids.reduce((a,k)=>(lay(k),a+k.w),0):1})(n);
+  const nodes=[],edges=[];let maxD=0;
+  (function place(n,x0,d){n.x=x0+n.w/2;n.y=d;maxD=Math.max(maxD,d);nodes.push(n);let x=x0;n.kids.forEach(k=>{edges.push([n,k]);place(k,x,d+1);x+=k.w;});})(n,0,0);
+  const W=n.w*84+30,H=(maxD+1)*76+20,X=v=>v*84+15,Y=v=>v*76+36;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${Math.min(W,560)}" role="img" aria-label="Parse tree">`+
+   edges.map(([a,b])=>`<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}" stroke="#4b3f6b" stroke-width="2"/>`).join('')+
+   nodes.map(k=>`<circle cx="${X(k.x)}" cy="${Y(k.y)}" r="22" fill="#1f1830" stroke="${COL[k.kind]}" stroke-width="2.5"/><text x="${X(k.x)}" y="${Y(k.y)}" fill="${COL[k.kind]}">${esc(k.label)}</text>`).join('')+`</svg>`;
+}
+const lines=a=>`<div class="code"><pre>${a.map(esc).join('\n')}</pre></div>`;
+const box=(t,d,b)=>`<div class="box"><h3>${t}</h3><p class="d">${d}</p>${b}</div>`;
+
+async function run(){
+  const r=await fetch('/api/lab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expr:$('#e').value})});
+  const d=await r.json();
+  if(!d.ok){const e=$('#e').value;
+    $('#out').innerHTML=`<div class="banner bad" style="margin-top:16px">${esc(d.error)}</div>`+
+    (e?`<div class="box"><pre style="color:var(--peach)">${esc(e)}\n${' '.repeat(d.pos||0)}^ here</pre></div>`:'');return;}
+  const saved=d.tac.length-d.opt_tac.length;
+  $('#out').innerHTML=
+   box('1. Lexical analysis','The scanner groups characters into tokens.',`<div class="tok">${d.tokens.map(t=>`<span>${esc(t.text)}<small>${t.kind}</small></span>`).join('')}</div>`)+
+   `<div class="two">`+
+   box('2. Syntax analysis','A recursive-descent parser builds this parse tree using the grammar below.',tree(d.ast)+`<pre class="gram" style="margin-top:12px;font-size:12px">${d.grammar.map(esc).join('\n')}</pre>`)+
+   box('3. Optimisation','Constant folding and simple identities shrink the tree before code is generated.',tree(d.opt_ast))+`</div>`+
+   `<div class="two">`+
+   box('4. Intermediate code (three-address)','Before optimisation.',lines(d.tac))+
+   box('5. Optimised intermediate code','After optimisation.',lines(d.opt_tac)+`<p class="save">${saved>0?`Saved ${saved} instruction${saved>1?'s':''} (${d.tac.length} to ${d.opt_tac.length}).`:'Nothing to optimise in this one. Try the first example.'}</p>`)+`</div>`+
+   box('6. Target code (stack machine)','Final code for a simple stack-based virtual machine, generated from the optimised tree.',lines(d.opt_stack));
+}
+run();
+</script></body></html>

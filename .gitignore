@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+.vscode/
+.idea/
+*.out
+*.class
+
+data.db
+.secret_key

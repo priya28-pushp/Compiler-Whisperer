@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compiler Whisperer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Compiler <span>Whisperer</span></h1>
+  <p class="sub">Paste your code. We compile it, show which compiler phase caught each mistake, and explain it in plain English.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="bar" id="langs">
+        <button class="pill on" data-l="c">C</button><button class="pill" data-l="cpp">C++</button>
+        <button class="pill" data-l="java">Java</button><button class="pill" data-l="python">Python</button>
+        <span class="sp"></span>
+        <button class="ghost" id="ex">Load example</button><button class="ghost" id="clr">Clear</button>
+      </div>
+      <div class="editor"><div id="gutter"></div><textarea id="code" spellcheck="false" wrap="off" aria-label="Source code"></textarea></div>
+      <details class="stdin"><summary>Program input (optional)</summary>
+        <textarea id="stdin" spellcheck="false" placeholder="If your program reads input (scanf, input(), Scanner), type it here, one value per line."></textarea></details>
+      <label class="runrow tutor"><input type="checkbox" id="tutor"> <span><b>"Don't give me the answer" mode</b><br><small>Get hints first. The solution appears only when you ask.</small></span></label>
+      <label class="runrow"><input type="checkbox" id="run" checked> Run the program after compiling</label>
+      <button class="go" id="go">Analyze code</button>
+      <p class="hint" id="hint">Your code is compiled, then run with a 5 second time limit.</p>
+    </section>
+
+    <section class="panel" id="out" aria-live="polite">
+      <div class="empty"><b>Nothing to explain yet</b>Load the example or paste your own code, then press Analyze code.</div>
+    </section>
+  </div>
+</div>
+
+<script src="/static/nav.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const STAGES=['Preprocess','Lexical','Syntax','Semantic','Linking','Runtime'];
+const EX={
+c:`#include <stdio.h>
+
+int main() {
+    int total = 0
+    for (int i = 1; i <= 5; i++) {
+        total += i;
+    }
+    printf("Sum = %d\\n", totl);
+    return 0;
+}`,
+cpp:`#include <iostream>
+using namespace std;
+
+int main() {
+    int age = "twenty";
+    cout << age << endl;
+    return 0;
+}`,
+java:`public class Main {
+    public static void main(String[] args) {
+        int count = 5;
+        System.out.println("Count: " + cnt);
+    }
+}`,
+python:`def greet(name)
+    print("Hello, " + name)
+
+greet("Ada")`};
+let lang='c',fixed='';
+const code=$('#code'),gut=$('#gutter');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function gutter(bad=[]){
+  const n=code.value.split('\n').length;
+  gut.innerHTML=Array.from({length:n},(_,i)=>`<span class="${bad.includes(i+1)?'bad':''}">${i+1}</span>`).join('');
+}
+code.addEventListener('input',()=>gutter());
+code.addEventListener('scroll',()=>gut.scrollTop=code.scrollTop);
+code.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();document.execCommand('insertText',false,'    ');}});
+
+document.querySelectorAll('#langs .pill').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#langs .pill').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');lang=b.dataset.l;
+});
+$('#ex').onclick=()=>{code.value=EX[lang];gutter();};
+$('#clr').onclick=()=>{code.value='';gutter();$('#out').innerHTML='<div class="empty"><b>Nothing to explain yet</b>Paste some code to begin.</div>';};
+
+$('#go').onclick=async()=>{
+  const btn=$('#go');btn.disabled=true;btn.textContent='Analyzing...';
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language:lang,code:code.value,run:$('#run').checked,stdin:$('#stdin').value})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');
+    d._prog=progress(d);lastD=d;render(d);
+  }catch(e){$('#out').innerHTML=`<div class="banner bad">${esc(e.message)}</div>`;}
+  btn.disabled=false;btn.textContent='Analyze code';
+};
+
+function runPanel(r){
+  if(!r||!r.ran)return r&&r.note?`<p class="note">${esc(r.note)}</p>`:'';
+  const good=r.exit_code===0&&!r.timed_out;
+  return `<section class="term"><header><span>Program output</span><em class="${good?'okc':'badc'}">${r.timed_out?'timed out':'exit code '+r.exit_code}</em></header>
+  <pre>${r.stdout?esc(r.stdout):'<i>(the program printed nothing)</i>'}${r.stderr?`<b class="se">${esc(r.stderr)}</b>`:''}${r.truncated?'\n... output cut off':''}</pre></section>`;
+}
+let tutor=localStorage.getItem('tutor')==='1',prev=null,hintsUsed=0,lastD=null;
+const logHint=(title,level)=>fetch('/api/hint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,level})}).catch(()=>{});
+
+function progress(d){   // the "verify" step: compare this run with the previous one
+  const n=d.errors.filter(e=>e.severity!=='warning').length;let msg='';
+  if(!d.compiler_missing&&prev!==null&&prev>0){
+    if(n===0){msg=`Fixed! You solved it ${hintsUsed?`after ${hintsUsed} extra hint${hintsUsed>1?'s':''}`:'without needing extra hints'}. Nice debugging.`;hintsUsed=0;}
+    else if(n<prev)msg=`Progress: ${prev} error${prev>1?'s':''} down to ${n}. Keep going.`;
+  }
+  prev=d.compiler_missing?null:n;return msg;
+}
+const fixedHtml=()=>`<details class="fixed" open><summary>Corrected program</summary><pre>${esc(fixed)}</pre>
+  <div class="bar" style="margin:10px 0 0"><button class="pill" id="apply">Put in editor</button><button class="pill" id="copy">Copy</button></div></details>`;
+function wireFixed(){const a=$('#apply');if(a){a.onclick=()=>{code.value=fixed;gutter();};$('#copy').onclick=()=>navigator.clipboard.writeText(fixed);}}
+
+function rootPanel(A){
+  if(!A||!A.headline)return '';
+  if(!A.cascade_count)return `<p class="note">${esc(A.headline)}</p>`;
+  if(tutor)return `<section class="rc"><h3>Root-cause analysis</h3><p>${esc(A.headline)}</p></section>`;
+  return `<section class="rc"><h3>Root-cause analysis</h3><div class="flow">
+    <div class="n root"><b>ROOT ERROR</b>${esc(A.chain[0])}</div><span>&rarr;</span>
+    <div class="n mid"><b>CASCADE</b>${esc(A.chain[1])}</div><span>&rarr;</span>
+    <div class="n sym"><b>SYMPTOM</b>${esc(A.chain[2])}</div></div><p style="margin-top:12px">${esc(A.headline)}</p></section>`;
+}
+function card(e,i,A){
+  const lock=tutor&&e.severity!=='warning',lk=lock?'locked':'',hid=lock?'hidden':'',c=e.card,cas=A&&A.cascade_count;
+  const badge=cas&&e.role==='cascade'?'<span class="badge casc">Probably a side-effect</span>':cas&&e.role==='root'?'<span class="badge root">Fix this first</span>':'';
+  const head=lock?(e.line?`Error on line ${e.line}`:'Something went wrong here'):e.title;
+  const guide=lock?`<div class="ladder" data-i="${i}">
+    <div class="step"><h4>Gentle hint</h4><p>${esc(e.hints.gentle)}</p></div>
+    <div class="step" data-lv="strong" hidden><h4>Strong hint</h4><p>${esc(e.hints.strong)}</p></div>
+    <div class="step sol" data-lv="solution" hidden><h4>Solution</h4><p>${esc(e.fix)}</p></div>
+    <button class="pill more" data-next="strong">I need a stronger hint</button></div>`
+   :`<div class="fix"><h4>How to fix it</h4><p>${esc(e.fix)}</p></div>`;
+  return `<article class="err ${e.severity} ${e.role==='cascade'&&cas?'casc':''}">
+    <header><span class="tag">${esc(e.phase)}</span><h3>${esc(head)}</h3>${badge}${e.line?`<span class="ln">line ${e.line}</span>`:''}</header>
+    ${e.source?`<pre class="src">${esc(e.source)}</pre>`:''}
+    <p class="raw">${esc(e.message)}</p>
+    <div class="${lk}" ${hid}><h4>What happened</h4><p>${esc(e.explanation)}</p></div>
+    ${guide}
+    <details class="concept ${lk}" ${hid} ${e.severity!=='warning'?'open':''}><summary>Concept card</summary><div class="cc">
+      <span class="tag">${esc(c.kind.toUpperCase())} ERROR</span>
+      <section><h4><i>1</i> Error in simple words</h4><h5>${esc(c.title)}</h5><p>${esc(c.simple)}</p></section>
+      <section><h4><i>2</i> Why the compiler rejected it</h4><p>${esc(c.why)}</p></section>
+      <section><h4><i>3</i> Programming concept involved</h4><p><b>${esc(c.concept)}</b>: ${esc(c.define)}</p></section>
+      <section><h4><i>4</i> Example + mini explanation</h4>
+        <div class="ex"><div><small>Wrong</small><pre>${esc(c.bad)}</pre></div><div><small>Right</small><pre>${esc(c.good)}</pre></div></div>
+        <p class="mini">${esc(c.explain)}</p></section>
+      <section><h4><i>5</i> Related concepts to review</h4><div class="chips">${c.related.map(r=>`<span>${esc(r.toUpperCase())}</span>`).join('')}</div></section>
+    </div></details></article>`;
+}
+function wireLadders(d){
+  document.querySelectorAll('.ladder').forEach(Lad=>{
+    const e=d.errors[+Lad.dataset.i],btn=Lad.querySelector('.more'),art=Lad.closest('article');
+    btn.onclick=()=>{const nx=btn.dataset.next;hintsUsed++;logHint(e.title,nx);
+      Lad.querySelector(`[data-lv="${nx}"]`).hidden=false;
+      if(nx==='strong'){btn.dataset.next='solution';btn.textContent='Show me the solution';}
+      else{btn.remove();art.querySelectorAll('.locked').forEach(x=>x.hidden=false);art.querySelector('h3').textContent=e.title;const cd=art.querySelector('.concept');if(cd)cd.open=true;}};
+  });
+}
+
+function render(d,quiet){
+  const hard=d.errors.filter(e=>e.severity!=='warning'),warns=d.errors.length-hard.length;
+  gutter(d.errors.map(e=>e.line).filter(Boolean));
+  let h='';
+  if(d._prog)h+=`<div class="banner ok">${esc(d._prog)}</div>`;
+  if(d.compiler_missing)h+=`<div class="banner warn">${esc(d.raw)} Showing our own lexical and bracket checks instead.</div>`;
+  else if(!hard.length)h+=`<div class="banner ok">Compiled cleanly${warns?` with ${warns} warning${warns>1?'s':''}`:''}. Nice work!</div>`;
+  else h+=`<div class="banner bad">${hard.length} error${hard.length>1?'s':''} found${warns?` and ${warns} warning${warns>1?'s':''}`:''}</div>`;
+  h+=runPanel(d.run);
+  const failed=new Set(hard.map(e=>e.phase));
+  h+='<div class="pipe">'+STAGES.map((s,i)=>`<div class="stage ${failed.has(s)?'fail':(d.compiler_missing||(s==='Runtime'&&!d.run.ran))?'':'pass'}"><b>${i+1}</b>${s}</div>`).join('')+'</div>';
+  h+=`<p class="note">${d.ai.used?'Explanations written by AI.':'Explanations from the built-in rule engine. Set ANTHROPIC_API_KEY for AI explanations and a corrected program.'}${d.ai.error?' (AI unavailable: '+esc(d.ai.error)+')':''}</p>`;
+  h+=rootPanel(d.analysis);
+  h+=d.errors.map((e,i)=>card(e,i,d.analysis)).join('');
+  if(d.ai.fixed_code){fixed=d.ai.fixed_code;
+    h+=tutor?'<div id="fixslot"><button class="pill" id="revfix">Reveal corrected program</button></div>':fixedHtml();}
+  const L=d.lexer,c=Object.entries(L.counts).map(([k,v])=>`<span>${k} <em>${v}</em></span>`).join('');
+  h+=`<details><summary>Token stream from lexical analysis (${L.total} tokens)</summary><div class="chips">${c}</div>
+  <pre style="margin-top:10px;color:var(--mute)">${L.tokens.slice(0,40).map(t=>`${t.kind.padEnd(9)} ${t.text}`).join('\n')}${L.total>40?'\n...':''}</pre></details>`;
+  $('#out').innerHTML=h;
+  wireLadders(d);wireFixed();
+  const rv=$('#revfix');if(rv)rv.onclick=()=>{logHint('corrected program','solution');$('#fixslot').innerHTML=fixedHtml();wireFixed();};
+  if(tutor&&!quiet)d.errors.forEach(e=>{if(e.severity!=='warning')logHint(e.title,'gentle');});
+}
+$('#tutor').checked=tutor;
+$('#tutor').onchange=e=>{tutor=e.target.checked;localStorage.setItem('tutor',tutor?'1':'0');if(lastD)render(lastD,true);};
+const re=sessionStorage.getItem('reopen');
+if(re){const o=JSON.parse(re);sessionStorage.removeItem('reopen');lang=o.lang;code.value=o.code;
+  document.querySelectorAll('#langs .pill').forEach(x=>x.classList.toggle('on',x.dataset.l===lang));}
+else code.value=EX.c;
+gutter();
+code.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')$('#go').click();});
+</script>
+</body>
+</html>

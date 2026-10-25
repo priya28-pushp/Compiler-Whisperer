@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · Compiler Whisperer</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}@media(max-width:800px){.stats{grid-template-columns:1fr 1fr}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.stat b{display:block;font:500 2.2rem/1.1 'Fraunces',serif}.stat span{color:var(--mute);font-size:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}@media(max-width:800px){.two{grid-template-columns:1fr}}
+h3{font:500 1.2rem 'Fraunces',serif;margin-bottom:12px}
+.hb{display:grid;grid-template-columns:90px 1fr 30px;gap:10px;align-items:center;margin:9px 0;font-size:14px}
+.hb div{height:10px;background:#120d1c;border-radius:6px;overflow:hidden}.hb i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--peach),var(--lilac))}
+.days{display:flex;align-items:flex-end;gap:6px;height:130px}.days div{flex:1;background:var(--lilac);border-radius:5px 5px 0 0;min-height:3px;opacity:.85}
+.dl{display:flex;gap:6px;color:var(--mute);font-size:10.5px;margin-top:6px}.dl span{flex:1;text-align:center}
+.insight{background:linear-gradient(100deg,#ffc2a122,#c3b1ff22);border:1px solid var(--line);border-radius:var(--r);padding:16px 20px;margin-bottom:18px;font-size:17px}
+.h{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+.h pre{flex:1;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%}.when{color:var(--mute);font-size:12.5px}
+</style></head>
+<body><div class="wrap">
+<h1>Your <span>progress</span></h1>
+<p class="sub">Every analysis is saved, so you can see which mistakes keep coming back.</p>
+<div id="root"><p class="sub">Loading...</p></div>
+</div>
+<script src="/static/nav.js"></script>
+<script>
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const NAMES={gentle:'Gentle hint',strong:'Strong hint',solution:'Solution',c:'C',cpp:'C++',java:'Java',python:'Python'};
+(async()=>{
+  const [s,h]=await Promise.all([fetch('/api/stats').then(r=>r.json()),fetch('/api/history').then(r=>r.json())]);
+  if(!s.total){$=document.getElementById('root');$.innerHTML='<section class="panel"><div class="empty"><b>No analyses yet</b>Run your first one in the Analyzer and your stats will show up here.<br><br><a class="pill on" href="/" style="text-decoration:none;display:inline-block">Go to Analyzer</a></div></section>';return;}
+  const mx=Math.max(1,...Object.values(s.phases)),dm=Math.max(1,...s.days.map(d=>d.n));
+  const bars=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="hb"><span>${esc(NAMES[k]||k)}</span><div><i style="width:${v/Math.max(...Object.values(o))*100}%"></i></div><b>${v}</b></div>`).join('')||'<p class="sub">No errors yet. Impressive.</p>';
+  document.getElementById('root').innerHTML=
+   `<div class="stats"><div class="stat"><b>${s.total}</b><span>analyses run</span></div><div class="stat"><b>${s.rate}%</b><span>compiled cleanly</span></div>
+    <div class="stat"><b>${s.streak}</b><span>clean compiles in a row</span></div><div class="stat"><b>${Object.values(s.phases).reduce((a,b)=>a+b,0)}</b><span>errors explained</span></div></div>`+
+   (s.insight?`<div class="insight">${esc(s.insight)}</div>`:'')+
+   `<div class="two"><section class="panel"><h3>Errors by compiler phase</h3>${bars(s.phases)}</section>
+    <section class="panel"><h3>Mistakes you repeat most</h3>${bars(Object.fromEntries(s.top))}</section></div>
+   <div class="two"><section class="panel"><h3>Activity, last 14 days</h3><div class="days">${s.days.map(d=>`<div title="${d.d}: ${d.n}" style="height:${d.n/dm*100}%"></div>`).join('')}</div>
+    <div class="dl">${s.days.map((d,i)=>`<span>${i%3===0?d.d.slice(0,2):''}</span>`).join('')}</div></section>
+    <section class="panel"><h3>Languages</h3>${bars(s.langs)}</section></div>
+   <div class="two"><section class="panel"><h3>Concepts to review</h3>${bars(Object.fromEntries(s.concepts))}</section>
+    <section class="panel"><h3>Hint ladder usage</h3>${Object.keys(s.hints).length?bars(s.hints):'<p class="sub">No hints used yet. Try "Don\'t give me the answer" mode.</p>'}</section></div>
+   <section class="panel"><h3>Recent analyses</h3>${h.map((r,i)=>`<div class="h"><span class="dot" style="background:${r.ok?'var(--mint)':'var(--rose)'}"></span><span>${NAMES[r.lang]}</span>
+     <pre>${esc(r.code.split('\n')[0])}</pre><span class="when">${r.errors} error${r.errors===1?'':'s'} · ${new Date(r.created*1000).toLocaleDateString()}</span>
+     <button class="pill" data-i="${i}">Reopen</button></div>`).join('')}</section>`;
+  document.querySelectorAll('.h .pill').forEach(b=>b.onclick=()=>{const r=h[b.dataset.i];sessionStorage.setItem('reopen',JSON.stringify({lang:r.lang,code:r.code}));location.href='/';});
+})();
+</script></body></html>

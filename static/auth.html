@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Compiler Whisperer</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#161020;--panel:#1f1830;--line:#3a2f55;--ink:#f1ecfa;--mute:#a69bc0;--lilac:#c3b1ff;--peach:#ffc2a1;--mint:#8ee6bf;--rose:#ff8aa5}
+*{box-sizing:border-box;margin:0}
+body{font:16px/1.6 'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
+@media(max-width:860px){body{grid-template-columns:1fr}.side{display:none}}
+.side{padding:56px;display:flex;flex-direction:column;justify-content:space-between;background:radial-gradient(700px 500px at 20% 10%,#4b3380,transparent 60%),radial-gradient(600px 500px at 90% 100%,#5a2f4d,transparent 60%),#1a1229}
+.side h1{font:italic 500 clamp(2.6rem,5vw,4.2rem)/1.02 'Fraunces',serif;letter-spacing:-.02em}
+.side h1 span{color:var(--peach)}
+.side p.t{color:var(--mute);max-width:42ch;margin-top:14px}
+.demo{background:#120d1ccc;border:1px solid var(--line);border-radius:16px;padding:20px;font:14px/1.7 'JetBrains Mono',monospace;max-width:480px}
+.demo .code{color:var(--ink)}.demo .code u{text-decoration:wavy underline var(--rose)}
+.demo .tag{display:inline-block;font:500 12px 'DM Sans';background:#c3b1ff26;color:var(--lilac);padding:1px 10px;border-radius:99px;margin:10px 0 4px}
+.demo .say{font:15px/1.55 'DM Sans';color:var(--mint);min-height:48px}
+.demo .say::after{content:'▍';animation:b 1s steps(1) infinite;color:var(--peach)}@keyframes b{50%{opacity:0}}
+main{display:grid;place-items:center;padding:32px}
+.card{width:100%;max-width:410px}
+.card h2{font:500 2rem 'Fraunces',serif;margin-bottom:4px}.card .s{color:var(--mute);margin-bottom:22px}
+label{display:block;font-size:14px;font-weight:500;margin:14px 0 6px}
+.f{position:relative}
+input{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;color:var(--ink);font:16px 'DM Sans';outline:0;transition:.2s}
+input:focus{border-color:var(--lilac);box-shadow:0 0 0 3px #c3b1ff22}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--mute);cursor:pointer;font:500 13px 'DM Sans';padding:6px}
+.meter{display:flex;gap:5px;margin-top:8px}.meter i{flex:1;height:4px;border-radius:4px;background:var(--line);transition:.3s}
+.mt{font-size:12.5px;color:var(--mute);margin-top:4px}
+button.main{margin-top:22px;width:100%;border:0;border-radius:12px;padding:14px;font:600 16px 'DM Sans';cursor:pointer;color:#26143a;background:linear-gradient(100deg,var(--peach),var(--lilac))}
+button.main:disabled{opacity:.6}
+.msg{margin-top:16px;padding:11px 14px;border-radius:10px;font-size:14.5px}.msg:empty{display:none}
+.msg.err{background:#ff8aa51c;color:var(--rose)}.msg.ok{background:#8ee6bf1c;color:var(--mint)}
+.msg a{color:var(--peach);word-break:break-all}
+.alt{margin-top:22px;color:var(--mute);font-size:14.5px;text-align:center}.alt a{color:var(--lilac);text-decoration:none;font-weight:500}.alt a:hover{text-decoration:underline}
+.row{display:flex;justify-content:flex-end;margin-top:8px;font-size:14px}.row a{color:var(--mute);text-decoration:none}.row a:hover{color:var(--peach)}
+:focus-visible{outline:2px solid var(--peach);outline-offset:2px}
+</style></head>
+<body>
+<aside class="side">
+  <div><h1>Compiler<br><span>Whisperer</span></h1><p class="t">Compiler errors, translated into plain English. Learn why your code broke, not just that it did.</p></div>
+  <div class="demo" aria-hidden="true"><div class="code" id="dc"></div><span class="tag" id="dt"></span><div class="say" id="ds"></div></div>
+</aside>
+
+<main><div class="card">
+  <section id="v-login"><h2>Welcome back</h2><p class="s">Log in to keep your error history and stats.</p>
+    <form id="f-login"><label for="le">Email</label><input id="le" type="email" autocomplete="email" required>
+      <label for="lp">Password</label><div class="f"><input id="lp" type="password" autocomplete="current-password" required><button type="button" class="eye">Show</button></div>
+      <div class="row"><a href="#forgot">Forgot password?</a></div><button class="main">Log in</button></form>
+    <p class="alt">New here? <a href="#signup">Create an account</a></p></section>
+
+  <section id="v-signup" hidden><h2>Create your account</h2><p class="s">Free, and it takes about ten seconds.</p>
+    <form id="f-signup"><label for="sn">Name</label><input id="sn" autocomplete="name" required>
+      <label for="se">Email</label><input id="se" type="email" autocomplete="email" required>
+      <label for="sp">Password</label><div class="f"><input id="sp" type="password" autocomplete="new-password" required><button type="button" class="eye">Show</button></div>
+      <div class="meter"><i></i><i></i><i></i><i></i></div><p class="mt" id="mt">Use 8+ characters with a letter and a number.</p>
+      <button class="main">Create account</button></form>
+    <p class="alt">Already registered? <a href="#login">Log in</a></p></section>
+
+  <section id="v-forgot" hidden><h2>Reset your password</h2><p class="s">Enter your email and we'll send you a reset link.</p>
+    <form id="f-forgot"><label for="fe">Email</label><input id="fe" type="email" required><button class="main">Send reset link</button></form>
+    <p class="alt"><a href="#login">Back to log in</a></p></section>
+
+  <section id="v-reset" hidden><h2>Choose a new password</h2><p class="s">Pick something you haven't used before.</p>
+    <form id="f-reset"><label for="rp">New password</label><div class="f"><input id="rp" type="password" autocomplete="new-password" required><button type="button" class="eye">Show</button></div>
+      <button class="main">Save new password</button></form></section>
+  <div class="msg" id="msg" role="status"></div>
+</div></main>
+
+<script>
+const $=s=>document.querySelector(s),V=['login','signup','forgot','reset'];let TOKEN='';
+const msg=(t,c='err')=>{const m=$('#msg');m.className='msg '+c;m.innerHTML=t;};
+function route(){const h=location.hash.slice(1);msg('');
+  if(h.startsWith('reset=')){TOKEN=h.slice(6);var v='reset';}else var v=V.includes(h)?h:'login';
+  V.forEach(x=>$('#v-'+x).hidden=x!==v);}
+addEventListener('hashchange',route);route();
+
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Something went wrong. Try again.');return d;}
+function wire(id,fn){$('#f-'+id).onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('.main');b.disabled=true;
+  try{await fn()}catch(x){msg(x.message)}b.disabled=false;}}
+wire('login',async()=>{await post('/api/login',{email:$('#le').value,password:$('#lp').value});location.href='/';});
+wire('signup',async()=>{await post('/api/signup',{name:$('#sn').value,email:$('#se').value,password:$('#sp').value});location.href='/';});
+wire('forgot',async()=>{const d=await post('/api/forgot',{email:$('#fe').value});
+  msg(d.message+(d.demo_link?`<br><br>Demo mode: no email server is connected, so here is your link:<br><a href="${d.demo_link}">${d.demo_link}</a>`:''),'ok');});
+wire('reset',async()=>{await post('/api/reset',{token:TOKEN,password:$('#rp').value});
+  msg('Password updated. You can log in now.','ok');setTimeout(()=>location.hash='#login',1400);});
+
+document.querySelectorAll('.eye').forEach(b=>b.onclick=()=>{const i=b.previousElementSibling;i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'Show':'Hide';});
+$('#sp').oninput=e=>{const p=e.target.value;
+  const s=[p.length>=8,/[a-z]/.test(p)&&/[A-Z]/.test(p),/\d/.test(p),/[^A-Za-z0-9]/.test(p)||p.length>=12].filter(Boolean).length;
+  document.querySelectorAll('.meter i').forEach((el,i)=>el.style.background=i<s?['#ff8aa5','#ffd48a','#c3b1ff','#8ee6bf'][s-1]:'');
+  $('#mt').textContent=p?['Too weak','Getting there','Good','Strong'][Math.max(s-1,0)]:'Use 8+ characters with a letter and a number.';};
+
+// left-panel demo: a broken line, its phase, then the plain-English explanation typed out
+const D=[['int total = 0<u> </u>','Syntax','The compiler reached the end of this statement and found no semicolon. Add one after 0.'],
+ ['printf("%d", <u>totl</u>);','Semantic','"totl" was never declared. Did you mean "total"? Names must match exactly.'],
+ ['def greet(name)<u> </u>','Syntax','Python needs a colon at the end of a def line. Add : after the parenthesis.'],
+ ['x = (2 + 3<u> </u>','Syntax','A bracket was opened but never closed. Add ) to match the one before 2.']];
+let k=0;const calm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+async function play(){const [c,t,s]=D[k++%D.length];$('#dc').innerHTML=c;$('#dt').textContent=t;const el=$('#ds');el.textContent='';
+  if(calm){el.textContent=s;return;}
+  for(const ch of s){el.textContent+=ch;await new Promise(r=>setTimeout(r,22));}
+  setTimeout(play,2600);}
+play();
+</script></body></html>
